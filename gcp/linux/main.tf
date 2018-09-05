@@ -1,0 +1,31 @@
+provider "google" {
+    credentials = "${file("~/.config/gcloud/servicefabric-214911-57a39f71d4d9.json")}"
+    project = "servicefabric-214911"
+}
+
+
+data "template_file" "init" {
+  template = "${file("script.sh")}"
+}
+# Create a new instance
+resource "google_compute_instance" "myvm" {
+   name = "myvm"
+   machine_type = "n1-standard-1"
+   zone = "australia-southeast1-a"
+    boot_disk {
+        initialize_params {
+            image = "ubuntu-1604-lts"
+        }
+    }
+    network_interface {
+        network = "default"
+        access_config {}
+    }
+
+    metadata_startup_script = "${data.template_file.init.rendered}"
+
+
+    service_account {
+        scopes = ["userinfo-email", "compute-ro", "storage-ro"]
+    }
+}
