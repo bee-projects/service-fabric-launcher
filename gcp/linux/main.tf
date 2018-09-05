@@ -1,6 +1,5 @@
 provider "google" {
     credentials = "${file("~/.config/gcloud/servicefabric-214911-57a39f71d4d9.json")}"
-    project = "servicefabric-214911"
 }
 
 
@@ -15,6 +14,7 @@ resource "google_compute_instance" "myvm" {
     boot_disk {
         initialize_params {
             image = "ubuntu-1604-lts"
+            size = 100
         }
     }
     network_interface {
