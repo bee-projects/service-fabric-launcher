@@ -1,5 +1,5 @@
 provider "google" {
-    credentials = "${file("~/.config/gcloud/servicefabric-214911-57a39f71d4d9.json")}"
+    
 }
 
 
