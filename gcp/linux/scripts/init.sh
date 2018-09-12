@@ -1,6 +1,6 @@
 #!/bin/bash -ex
 
-sudo apt-get install apt-transport-https
+sudo apt-get install apt-transport-https -y
 
 sudo curl -s https://raw.githubusercontent.com/Azure/service-fabric-scripts-and-templates/master/scripts/SetupServiceFabric/SetupServiceFabric.sh | sudo bash
 
