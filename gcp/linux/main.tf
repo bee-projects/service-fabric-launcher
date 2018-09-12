@@ -3,27 +3,23 @@ provider "google" {
 }
 
 
-data "template_file" "init" {
-  template = "${file("script.sh")}"
+data "template_file" "init-script" {
+  template = "${file("scripts/init.sh")}"
+  vars {
+    PROXY_PATH = ""
+  }
 }
-# Create a new instance
-resource "google_compute_instance" "myvm" {
-   name = "myvm"
-   machine_type = "n1-standard-2"
-   zone = "australia-southeast1-a"
-    boot_disk {
-        initialize_params {
-            image = "ubuntu-1604-lts"
-            size = 100
-        }
-    }
-    network_interface {
-        network = "default"
-        access_config {
-            network_tier = "PREMIUM"
-        }
-    }
 
-    metadata_startup_script = "${data.template_file.init.rendered}"
-
+module "mig1" {
+  source            = "GoogleCloudPlatform/managed-instance-group/google"
+  version           = "1.1.13"
+  region            = "australia-southeast1"
+  zone              = "australia-southeast1-a"
+  name              = "group1"
+  size              = 1
+  service_port      = 80
+  service_port_name = "http"
+  target_tags       = ["allow-service1"]
+  startup_script    = "${data.template_file.init-script.rendered}"
 }
+
