@@ -25,3 +25,6 @@ override.tf.json
 #
 # !example_override.tf
 
+
+.DS_Store
+
