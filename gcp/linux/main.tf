@@ -40,6 +40,21 @@ resource "google_compute_health_check" "autohealing" {
     }
 }
 
+module "gce-lb-http" {
+  source            = "github.com/GoogleCloudPlatform/terraform-google-lb-http"
+  name              = "group-http-lb"
+  target_tags       = ["sfnode"]
+  backends          = {
+    "0" = [
+      { group = "${google_compute_instance_group_manager.instance_group_manager.instance_group}" },
+    ],
+  }
+  backend_params    = [
+    # health check path, port name, port number, timeout seconds.
+    "/,sfabric,19080,10"
+  ]
+}
+
 resource "google_compute_instance_group_manager" "instance_group_manager" {
     depends_on            = ["google_compute_network.sfnet"]
     name               = "sfabric-igm"
