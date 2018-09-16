@@ -17,7 +17,7 @@ The diagram below illustrates the infrastructure that will get created:
 ```
 Outputs:
 
-external_ip = 35.241.32.234
+external_ip = <ip address>
 ```
 - Hit `external_ip` that gets output to see your Service Fabric cluster:
 
