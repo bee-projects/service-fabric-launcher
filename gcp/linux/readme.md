@@ -1,7 +1,7 @@
 
 # Overview
 
-This folder contains [terraform scripts](./main.tf) to luanch a developement environment of Microsoft's [Service Fabric](https://github.com/Microsoft/service-fabric) on the Google Cloud platform.
+This folder contains [terraform scripts](./main.tf) to launch a developement environment of the Microsoft's [Service Fabric](https://github.com/Microsoft/service-fabric) on Linux on the Google Cloud platform. This installation uses the Ubuntu script installation method described [here](https://docs.microsoft.com/en-us/azure/service-fabric/service-fabric-get-started-linux#installation-methods)
 
 The diagram below illustrates the infrastructure that will get created:
  
@@ -17,7 +17,7 @@ The diagram below illustrates the infrastructure that will get created:
 ```
 Outputs:
 
-external_ip = 35.241.32.234
+external_ip = <ip address>
 ```
 - Hit `external_ip` that gets output to see your Service Fabric cluster:
 
