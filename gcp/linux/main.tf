@@ -9,7 +9,7 @@ resource "google_compute_network" "sfnet" {
 
 resource "google_compute_firewall" "bastion-ssh" {
   name    = "bastion-ssh"
-  network = "sfnet"
+  network = "${google_compute_network.sfnet.self_link}"
 
   allow {
     protocol = "icmp"
@@ -24,10 +24,8 @@ resource "google_compute_firewall" "bastion-ssh" {
 }
 
 resource "google_compute_firewall" "internal-ssh" {
-  depends_on = ["google_compute_network.sfnet"]
   name    = "internal-ssh"
-  network = "sfnet"
-
+  network = "${google_compute_network.sfnet.self_link}"
   allow {
     protocol = "icmp"
   }
@@ -41,6 +39,31 @@ resource "google_compute_firewall" "internal-ssh" {
   target_tags = ["sfnode"]
 }
 
+
+resource "google_compute_firewall" "servicefabric-ports" {
+  name    = "servicefabric-ports"
+  network = "${google_compute_network.sfnet.self_link}"
+  allow {
+    protocol = "icmp"
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["19080"]
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80"]
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["443"]
+  }
+
+  target_tags = ["sfnode"]
+}
 
 
 
@@ -73,8 +96,8 @@ resource "google_compute_instance" "bastion" {
 module "nat" {
   source     = "GoogleCloudPlatform/nat-gateway/google"
   region     = "australia-southeast1"
-  network    = "sfnet"
-  subnetwork = "sfnet"
+  network    = "${google_compute_network.sfnet.name}"
+  subnetwork = "${google_compute_network.sfnet.name}"
 }
 
 data "template_file" "init-script" {
@@ -82,15 +105,14 @@ data "template_file" "init-script" {
 }
 
 resource "google_compute_instance_template" "sftemplate" {
-    depends_on = ["google_compute_network.sfnet"]
     name                  = "sftemplate"
     instance_description  = "Service Fabric Nodes"
-    tags = ["sfnode"]
+    tags = ["sfnode","nat-${var.region}"]
     machine_type          = "n1-standard-2"
     metadata_startup_script = "${data.template_file.init-script.rendered}"
     can_ip_forward        = false
     network_interface     {
-        network = "sfnet"
+        network = "${google_compute_network.sfnet.name}"
     }
     disk {
         source_image        = "ubuntu-1604-lts"
@@ -132,7 +154,9 @@ resource "google_compute_instance_group_manager" "instance_group_manager" {
 
   auto_healing_policies {
     health_check      = "${google_compute_health_check.autohealing.self_link}"
-    initial_delay_sec = 300
+
+    # Takes about 25 minutes to start up
+    initial_delay_sec = 1500
   }
 }
 
@@ -151,3 +175,9 @@ module "gce-lb-http" {
     "/,sfabric,19080,10"
   ]
 }
+
+output external_ip {
+  description = "The external IP assigned to the global fowarding rule."
+  value       = "${module.gce-lb-http.external_ip}"
+}
+
