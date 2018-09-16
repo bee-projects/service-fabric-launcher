@@ -1,6 +1,6 @@
 # Overview
 
-This repository will contain sample terraform scripts to launch Microsoft's Service Fabric on Linux on Azure, GCP and AWS. 
+This repository will contain sample terraform scripts to launch [Microsoft's Service Fabric](https://github.com/microsoft/service-fabric) on Linux on Azure, GCP and AWS. 
 
 ## GCP Deployment
 Please check [here](./linux/gcp/) for further details.
