@@ -105,6 +105,9 @@ resource "aws_launch_configuration" "as_conf" {
   image_id      = "${data.aws_ami.ubuntu.id}"
   instance_type = "m5.large"
   user_data     = "${file("${path.module}/scripts/init.sh")}"
+  root_block_device {
+      volume_size = 10
+  }
 }
 
 resource "aws_elb" "sfabric-lb" {
