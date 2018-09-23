@@ -2,6 +2,17 @@ provider "aws" {
   region = "ap-southeast-2"
 }
 
+variable "env" {
+  default = "dev"
+}
+
+variable "instance_type" {
+  default = "m5.large"
+}
+# ----------------------------------------------------------------------------------
+#  Network Setup
+# ----------------------------------------------------------------------------------
+
 resource "aws_vpc" "sfnet" {
   cidr_block            = "10.0.0.0/16"
   enable_dns_support    = "true"
@@ -84,6 +95,78 @@ resource "aws_route_table_association" "nat-table-association" {
   route_table_id = "${aws_route_table.nat-table.id}"
 }
 
+
+resource "aws_security_group" "nlb-sg" {
+  name        = "nlb-sg"
+  description = "Allow inbound HTTP/HTTPS traffic"
+  vpc_id      = "${aws_vpc.sfnet.id}"
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "sfnode-sg" {
+  name        = "sfnode-sg"
+  description = "Allow inbound HTTP/HTTPS traffic"
+  vpc_id      = "${aws_vpc.sfnet.id}"
+
+  ingress {
+    security_groups = ["${aws_security_group.nlb-sg.id}"]
+    from_port  = 19080
+    to_port     = 19080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+      security_groups = ["${aws_security_group.nlb-sg.id}"]
+      from_port  = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "bastion-sg" {
+  name        = "bastion-sg"
+  description = "Allow SSh to bastion"
+  vpc_id      = "${aws_vpc.sfnet.id}"
+
+  ingress {
+    from_port  = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+}
+
+
+
 data "aws_ami" "ubuntu" {
     most_recent = true
 
@@ -103,25 +186,57 @@ data "aws_ami" "ubuntu" {
 resource "aws_launch_configuration" "as_conf" {
   name          = "web_config"
   image_id      = "${data.aws_ami.ubuntu.id}"
-  instance_type = "m5.large"
+  instance_type = "${var.instance_type}"
   user_data     = "${file("${path.module}/scripts/init.sh")}"
   root_block_device {
       volume_size = 10
   }
 }
 
-resource "aws_elb" "sfabric-lb" {
-    availability_zones = ["ap-southeast-2a","ap-southeast-2b","ap-southeast-2c"]
-    name = "sfabric-lb"
-    listener {
-        instance_port     = 8000
-        instance_protocol = "http"
-        lb_port           = 80
-        lb_protocol       = "http"
-    }
+# ----------------------------------------------------------------------------------
+# Starting resources
+# ----------------------------------------------------------------------------------
+
+resource "aws_lb" "sfabric-lb" {
+  name               = "sfabric-lb"
+  internal           = false
+  load_balancer_type = "network"
+  subnets            = ["${aws_subnet.public.id}"]
+
+  enable_deletion_protection = false
+  enable_cross_zone_load_balancing = true
+
+  tags {
+    Environment = "${var.env}"
+  }
 }
-resource "aws_autoscaling_group" "bar" {
-  name                 = "terraform-asg-example"
+
+resource "aws_lb_target_group" "sfnode-tg" {
+  name     = "sfnode-tg"
+  port     = 19080
+  protocol = "TCP"
+  vpc_id   = "${aws_vpc.sfnet.id}"
+  stickiness {
+    type = "lb_cookie"
+    enabled = false
+  }
+}
+
+
+resource "aws_lb_listener" "sfnode-listener" {
+  load_balancer_arn = "${aws_lb.sfabric-lb.arn}"
+  port              = "80"
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = "${aws_lb_target_group.sfnode-tg.arn}"
+  }
+}
+
+
+resource "aws_autoscaling_group" "sfnode-asg" {
+  name                 = "sfnode-asg"
   launch_configuration = "${aws_launch_configuration.as_conf.name}"
   min_size             = 1
   max_size             = 1
@@ -130,6 +245,7 @@ resource "aws_autoscaling_group" "bar" {
     create_before_destroy = true
   }
   availability_zones = ["ap-southeast-2a","ap-southeast-2b","ap-southeast-2c"]
-  load_balancers = ["${aws_elb.sfabric-lb.id}"]
-  
+  vpc_zone_identifier = ["${aws_subnet.public.id}"]
+  target_group_arns  = ["${aws_lb_target_group.sfnode-tg.arn}"]
+
 }
