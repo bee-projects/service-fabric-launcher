@@ -2,9 +2,23 @@ provider "aws" {
   region = "ap-southeast-2"
 }
 
+variable "region" {
+  default="ap-southeast-2"
+}
+
+variable "zone1" {
+  default = "ap-southeast-2a"
+}
+
+variable "zone2" {
+  default = "ap-southeast-2b"
+}
+
+
 variable "env" {
   default = "dev"
 }
+
 
 variable "instance_type" {
   default = "m5.large"
@@ -26,6 +40,8 @@ resource "aws_subnet" "public" {
   vpc_id     = "${aws_vpc.sfnet.id}"
   cidr_block = "10.0.1.0/24"
 
+  availability_zone="${var.zone1}"
+
   tags {
     Name = "public"
   }
@@ -33,6 +49,7 @@ resource "aws_subnet" "public" {
 
 resource "aws_subnet" "private" {
   vpc_id     = "${aws_vpc.sfnet.id}"
+  availability_zone="${var.zone1}"
   cidr_block = "10.0.2.0/24"
 
   tags {
@@ -130,6 +147,13 @@ resource "aws_security_group" "sfnode-sg" {
   }
 
   ingress {
+    security_groups = ["${aws_security_group.bastion-sg.id}"]
+    from_port  = 22
+    to_port     = 22
+    protocol    = "tcp"
+  }
+
+  ingress {
       security_groups = ["${aws_security_group.nlb-sg.id}"]
       from_port  = 80
       to_port     = 80
@@ -189,8 +213,12 @@ resource "aws_launch_configuration" "as_conf" {
   instance_type = "${var.instance_type}"
   user_data     = "${file("${path.module}/scripts/init.sh")}"
   root_block_device {
-      volume_size = 10
+      volume_size = 100
   }
+  security_groups = ["${aws_security_group.sfnode-sg.id}"]
+  key_name = "${aws_key_pair.ssh-key.id}"
+  
+ 
 }
 
 # ----------------------------------------------------------------------------------
@@ -205,7 +233,7 @@ resource "aws_lb" "sfabric-lb" {
 
   enable_deletion_protection = false
   enable_cross_zone_load_balancing = true
-
+  
   tags {
     Environment = "${var.env}"
   }
@@ -245,7 +273,30 @@ resource "aws_autoscaling_group" "sfnode-asg" {
     create_before_destroy = true
   }
   availability_zones = ["ap-southeast-2a","ap-southeast-2b","ap-southeast-2c"]
-  vpc_zone_identifier = ["${aws_subnet.public.id}"]
+  vpc_zone_identifier = ["${aws_subnet.private.id}"]
   target_group_arns  = ["${aws_lb_target_group.sfnode-tg.arn}"]
 
+  tag {
+    key                 = "Name"
+    value               = "sfnode"
+    propagate_at_launch = true
+  }
+}
+
+
+resource "aws_instance" "bastion" {
+  subnet_id = "${aws_subnet.public.id}"
+  vpc_security_group_ids = ["${aws_security_group.bastion-sg.id}"]
+  associate_public_ip_address = true
+  ami           = "${data.aws_ami.ubuntu.id}"
+  instance_type = "t2.micro"
+  key_name = "${aws_key_pair.ssh-key.id}"
+  tags {
+    Name = "bastion"
+  }
+}
+
+resource "aws_key_pair" "ssh-key" {
+  key_name   = "ssh-key"
+  public_key = "${file("~/.ssh/id_rsa.pub")}"
 }
